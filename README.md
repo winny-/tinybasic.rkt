@@ -13,7 +13,7 @@ lex/yacc clone.
 It sorta works.  I think there's a precedence issue with MUL / DIV.  Testcase:
 
 ```bash
-echo run | cat examples/random.bas - | racket tinybasic.rkt
+echo run | cat examples/nonfree/random.bas - | racket tinybasic.rkt
 ```
 
 outputs:
@@ -35,6 +35,29 @@ Example:
 ```basic
 REM Exits tinybasic.rkt and returns control back to shell.
 BYE
+```
+
+#### `LOAD`
+
+Load a program from a file.
+
+Example:
+
+```basic
+REM Loads examples/hello.bas.
+LOAD "examples/hello.bas"
+```
+
+#### `SAVE`
+
+Save a program to a file.
+
+Example:
+
+```basic
+REM Saves hello.bas
+10 PRINT "Hello, world!"
+SAVE "examples/hello.bas"
 ```
 
 ## License

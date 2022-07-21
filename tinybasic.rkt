@@ -43,7 +43,10 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (NUMBER STRING VAR REM))
 
 (define-empty-tokens simple-tokens
-  (PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON THEN BYE NEWLINE))
+  ( ; This blank keeps racket-mode happy
+   PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE
+   ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON
+   THEN BYE NEWLINE LOAD SAVE))
 
 (define tb-lexer
   (lexer
@@ -67,6 +70,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
    [(:ci "RND") (token-RND)]
    [(:ci "THEN") (token-THEN)]
    [(:ci "BYE") (token-BYE)]
+   [(:ci "LOAD") (token-LOAD)]
+   [(:ci "SAVE") (token-SAVE)]
    ["=" (token-EQ)]
    ["<" (token-LT)]
    [">" (token-GT)]
@@ -109,6 +114,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
 (struct statement:list statement (exprlist) #:transparent)
 (struct statement:end statement () #:transparent)
 (struct statement:bye statement () #:transparent)
+(struct statement:load statement (filename) #:transparent)
+(struct statement:save statement (filename) #:transparent)
 (struct function () #:transparent)
 (struct function:rnd function (expr) #:transparent)
 
@@ -135,9 +142,6 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
    (start statement)
    (end EOF NEWLINE) ; Probably safe to omit NEWLINE as this should never be
                      ; used for an entire program.
-   (precs
-    (left ADD SUB)
-    (left MUL DIV))
    (error (λ (tok-ok? tok-name tok-value)
             (raise-syntax-error 'tb-parser (format "~a ~a ~a" tok-ok? tok-name tok-value))))
    (grammar
@@ -161,6 +165,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                [(LIST expression COMMA expression) (statement:list (list $2 $4))]
                [(END) (statement:end)]
                [(BYE) (statement:bye)]
+               [(LOAD STRING) (statement:load $2)]
+               [(SAVE STRING) (statement:save $2)]
                [() (statement:empty)])
     (printlist [() empty]
                [(printitem) (list $1)]
@@ -181,8 +187,11 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                   [(term SUB unsignedexpr)
                    (unsignedexpr:sub $1 $3)])
     (term [(factor) (term:unary $1)]
-          [(factor MUL term) (term:mul $1 $3)]
-          [(factor DIV term) (term:div $1 $3)])
+          ;; Note term and factor are reversed.  I'm guessing the original
+          ;; publication's grammar was slightly incorrect (as per the English
+          ;; description in the same publication).
+          [(term DIV factor) (term:div $3 $1)]
+          [(term MUL factor) (term:mul $3 $1)])
     (factor [(VAR) (factor $1)]
             [(NUMBER) (factor $1)]
             [(OPEN-PAREN expression CLOSE-PAREN) (factor $2)]
@@ -237,8 +246,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
 (define (get-var st var)
   (hash-ref (state-vars st) var))
 
-(struct state (vars program gosubs lineno) #:transparent)
-(define clean-state (state (make-vars) (hash) empty #f))
+(struct state (vars program gosubs lineno inputs) #:transparent)
+(define clean-state (state (make-vars) (hash) empty #f empty))
 
 (define (eval-expr expr the-state)
   (define (eval-unsigned unsigned)
@@ -292,6 +301,11 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
      (match (state-gosubs the-state)
        [(or (list) (list #f _ ...)) (raise-user-error 'eval-line "RETURN with invalid return address!")]
        [(list no xs ...) (struct-copy state the-state [lineno no] [gosubs xs])])]
+    [(struct statement:load (filename))
+     (struct-copy state clean-state
+                  [program
+                   (for/hash ([li (with-input-from-file filename (thunk (port->list tb-read)))])
+                     (values (line-number li) li))])]
     [(struct statement:bye ()) (exit 0)]
     [stmt
      (define st (match stmt
@@ -325,6 +339,12 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                   [(struct statement:let (var expr))
                    (struct-copy state the-state [vars (hash-set (state-vars the-state) var (e expr))])]
                   [(struct statement:empty ())
+                   the-state]
+                  [(struct statement:save (filename))
+                   (with-output-to-file filename
+                     (thunk (tb-write (state-program the-state)))
+                     #:mode 'text
+                     #:exists 'truncate)
                    the-state]))
      (struct-copy state st [lineno (next-line-in-listing st)])]))
 
@@ -334,8 +354,9 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
       [(struct* statement:input ()) (displayln "TODO interactive INPUT stmt")
                                     the-state]
       [(struct statement:run ((list xs ..1)))
-       (displayln "TODO interactive RUN stmt")
-       the-state]
+       ;; Save the inputs then rerun the line as a bare RUN statement.
+       (eval-line/direct (struct-copy line the-line [text "RUN"])
+                         (struct-copy state the-state [inputs (append (state-inputs the-state) xs)]))]
       [_ (eval-line the-line the-state)]))
   (let loop ([st next-state])
     (cond
