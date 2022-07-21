@@ -22,6 +22,21 @@ outputs:
 876166508014850563998993211812996257478583618645656828278906681797551328261158485532314783354491418866361211127119281689656470
 ```
 
+## Differences
+
+### New statements
+
+#### `BYE`
+
+Exit TinyBasic monitor.
+
+Example:
+
+```basic
+REM Exits tinybasic.rkt and returns control back to shell.
+BYE
+```
+
 ## License
 
 `tinybasic.rkt` is covered under MIT/X.

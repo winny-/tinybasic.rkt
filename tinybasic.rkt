@@ -43,7 +43,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (NUMBER STRING VAR REM))
 
 (define-empty-tokens simple-tokens
-  (PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON THEN BYE))
+  (PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON THEN BYE NEWLINE))
 
 (define tb-lexer
   (lexer
@@ -82,7 +82,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
    [":" (token-COLON)]
    ["(" (token-OPEN-PAREN)]
    [")" (token-CLOSE-PAREN)]
-   [twhitespace (tb-lexer input-port)]))
+   [twhitespace (tb-lexer input-port)]
+   [tcr (token-NEWLINE)]))
 
 (define (tb-lex/list ip)
   (define (gen) (tb-lexer ip))
@@ -132,7 +133,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (parser
    (tokens complex-tokens simple-tokens)
    (start statement)
-   (end EOF)
+   (end EOF NEWLINE) ; Probably safe to omit NEWLINE as this should never be
+                     ; used for an entire program.
    (precs
     (left ADD SUB)
     (left MUL DIV))
@@ -200,14 +202,15 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (port->list tb-read ip))
 
 (define (tb-read [ip (current-input-port)])
-  (match (read-line ip)
-    [(? eof-object? e) e]
-    [text
-     (match (string->line text)
-       [(struct* line ([number 0] [entire entire]))
-        (raise-syntax-error 'tb-read "Line number cannot be zero in `~a'" entire)]
-       [(? line? li) li]
-       [#f (raise-syntax-error 'tb-read "Bad line `~a'" text)])]))
+  (parameterize ([readline-prompt #": "])
+    (match (read-line ip)
+      [(? eof-object? e) e]
+      [text
+       (match (string->line text)
+         [(struct* line ([number 0] [entire entire]))
+          (raise-syntax-error 'tb-read "Line number cannot be zero in `~a'" entire)]
+         [(? line? li) li]
+         [#f (raise-syntax-error 'tb-read "Bad line `~a'" text)])])))
 
 (define (tb-write ast [output-port (current-output-port)] #:what [what 'all])
   (parameterize ([current-output-port output-port])
@@ -288,6 +291,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
      (match (state-gosubs the-state)
        [(or (list) (list #f _ ...)) (raise-user-error 'eval-line "RETURN with invalid return address!")]
        [(list no xs ...) (struct-copy state the-state [lineno no] [gosubs xs])])]
+    [(struct statement:bye ()) (exit 0)]
     [stmt
      (define st (match stmt
                   [(struct statement:rem (_)) the-state]
@@ -319,8 +323,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                    (tb-write (state-program the-state))]
                   [(struct statement:let (var expr))
                    (struct-copy state the-state [vars (hash-set (state-vars the-state) var (e expr))])]
-                  [(struct statement:bye ())
-                   (exit 0)]))
+                  [(struct statement:empty ())
+                   (void)]))
      (struct-copy state st [lineno (next-line-in-listing st)])]))
 
 (define (eval-line/direct the-line the-state)
@@ -355,29 +359,32 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
 (define (main)
   (define st clean-state)
   (define (eval what)
-    (match-define (cons _ the-line) what)
-    (match the-line
-      [(and the-line (struct line (#f stmt _)))
-       (with-handlers ([exn:fail? (λ (err) (printf "Eval failed: ~a\n" (exn-message err)) st)])
-         (set! st (eval-line/direct the-line st)))]
-      [(and the-line (struct line (lineno stmt raw)))
-       (set! st (struct-copy state st
-                             [program (hash-set (state-program st)
-                                                lineno the-line)]))]))
+    (match what
+      [(cons _ the-line)
+       (match the-line
+         [(and the-line (struct line (#f stmt _)))
+          (with-handlers ([exn:fail? (λ (err) (printf "Eval failed: ~a\n" (exn-message err)) st)])
+            (set! st (eval-line/direct the-line st)))]
+         [(and the-line (struct line (lineno stmt raw)))
+          (set! st (struct-copy state st
+                                [program (hash-set (state-program st)
+                                                   lineno the-line)]))])]
+      [idk (void)])) ; Whatever this is
+
+  (when (terminal-port? (current-input-port))
+    (dynamic-require 'readline #f)
+    (keep-duplicates 'unconsecutive))
+
   (current-prompt-read tb-read)
   (current-eval eval)
   (current-print (thunk* (void)))
-#;
-  (when (terminal-port? (current-input-port))
-    (dynamic-require 'readline #f)
-    (current-prompt #": ")
-    (keep-duplicates 'unconsecutive))
   (read-eval-print-loop))
 
 (module+ main
   (main))
 
-(define (parse-line s)
+(define/contract (parse-line s)
+  (-> (or/c string? line?) statement?)
   (when (line? s) (set! s (line-text s)))
   (if (statement? s)
       s
