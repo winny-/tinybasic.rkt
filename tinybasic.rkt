@@ -280,7 +280,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
     [(struct statement:end ())
      (struct-copy state the-state [lineno #f])]
     [(struct statement:gosub (expr))
-     (struct-copy state the-state [lineno (e expr)] [gosubs (cons (line-number the-line) (state-gosubs the-state))])]
+     (struct-copy state the-state [lineno (e expr)] [gosubs (cons (next-line-in-listing the-state)
+                                                                  (state-gosubs the-state))])]
     [(struct statement:goto (expr))
      (struct-copy state the-state [lineno (e expr)])]
     [(struct statement:run ((list _ ..1)))
@@ -324,7 +325,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                   [(struct statement:let (var expr))
                    (struct-copy state the-state [vars (hash-set (state-vars the-state) var (e expr))])]
                   [(struct statement:empty ())
-                   (void)]))
+                   the-state]))
      (struct-copy state st [lineno (next-line-in-listing st)])]))
 
 (define (eval-line/direct the-line the-state)

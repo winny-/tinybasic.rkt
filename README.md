@@ -41,4 +41,4 @@ BYE
 
 `tinybasic.rkt` is covered under MIT/X.
 
-Files in `examples/` and `TBuserMan.txt` are of unknown license - consider all rights reserved.
+Files in `examples/nonfree/` and `TBuserMan.txt` are of unknown license - consider all rights reserved.
