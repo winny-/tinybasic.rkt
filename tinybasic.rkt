@@ -14,7 +14,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
 
 (require parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
-         parser-tools/yacc)
+         parser-tools/yacc
+         readline/pread)
 
 (require racket/pretty)
 
@@ -42,7 +43,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (NUMBER STRING VAR REM))
 
 (define-empty-tokens simple-tokens
-  (PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON THEN))
+  (PRINT IF GOTO INPUT LET GOSUB RETURN CLEAR LIST RUN END EQ LT GT LTE GTE NE ADD SUB DIV MUL COMMA SPACE CLOSE-PAREN OPEN-PAREN RND EOF SEMICOLON COLON THEN BYE))
 
 (define tb-lexer
   (lexer
@@ -65,6 +66,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
    [(:ci "END") (token-END)]
    [(:ci "RND") (token-RND)]
    [(:ci "THEN") (token-THEN)]
+   [(:ci "BYE") (token-BYE)]
    ["=" (token-EQ)]
    ["<" (token-LT)]
    [">" (token-GT)]
@@ -105,6 +107,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
 (struct statement:run statement (exprlist) #:transparent)
 (struct statement:list statement (exprlist) #:transparent)
 (struct statement:end statement () #:transparent)
+(struct statement:bye statement () #:transparent)
 (struct function () #:transparent)
 (struct function:rnd function (expr) #:transparent)
 
@@ -155,6 +158,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                [(LIST expression) (statement:list (list $2))]
                [(LIST expression COMMA expression) (statement:list (list $2 $4))]
                [(END) (statement:end)]
+               [(BYE) (statement:bye)]
                [() (statement:empty)])
     (printlist [() empty]
                [(printitem) (list $1)]
@@ -314,7 +318,9 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                   [(struct statement:list ((list expr)))
                    (tb-write (state-program the-state))]
                   [(struct statement:let (var expr))
-                   (struct-copy state the-state [vars (hash-set (state-vars the-state) var (e expr))])]))
+                   (struct-copy state the-state [vars (hash-set (state-vars the-state) var (e expr))])]
+                  [(struct statement:bye ())
+                   (exit 0)]))
      (struct-copy state st [lineno (next-line-in-listing st)])]))
 
 (define (eval-line/direct the-line the-state)
@@ -347,19 +353,26 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
          no)))
 
 (define (main)
-  (let loop ([the-state clean-state])
-    (when (terminal-port? (current-input-port))
-      (display ": "))
-    (match (tb-read)
-      [(? eof-object?) (exit 0)]
+  (define st clean-state)
+  (define (eval what)
+    (match-define (cons _ the-line) what)
+    (match the-line
       [(and the-line (struct line (#f stmt _)))
-       (loop
-        (with-handlers ([exn:fail? (λ (err) (printf "Eval failed: ~a\n" (exn-message err)) the-state)])
-          (eval-line/direct the-line the-state)))]
+       (with-handlers ([exn:fail? (λ (err) (printf "Eval failed: ~a\n" (exn-message err)) st)])
+         (set! st (eval-line/direct the-line st)))]
       [(and the-line (struct line (lineno stmt raw)))
-       (loop (struct-copy state the-state
-                          [program (hash-set (state-program the-state)
-                                             lineno the-line)]))])))
+       (set! st (struct-copy state st
+                             [program (hash-set (state-program st)
+                                                lineno the-line)]))]))
+  (current-prompt-read tb-read)
+  (current-eval eval)
+  (current-print (thunk* (void)))
+#;
+  (when (terminal-port? (current-input-port))
+    (dynamic-require 'readline #f)
+    (current-prompt #": ")
+    (keep-duplicates 'unconsecutive))
+  (read-eval-print-loop))
 
 (module+ main
   (main))
