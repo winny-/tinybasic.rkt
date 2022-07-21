@@ -190,8 +190,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
           ;; Note term and factor are reversed.  I'm guessing the original
           ;; publication's grammar was slightly incorrect (as per the English
           ;; description in the same publication).
-          [(term DIV factor) (term:div $3 $1)]
-          [(term MUL factor) (term:mul $3 $1)])
+          [(term DIV factor) (term:div $1 $3)]
+          [(term MUL factor) (term:mul $1 $3)])
     (factor [(VAR) (factor $1)]
             [(NUMBER) (factor $1)]
             [(OPEN-PAREN expression CLOSE-PAREN) (factor $2)]
@@ -258,8 +258,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
   (define (eval-term term)
     (match term
       [(struct term:unary (factor)) (eval-factor factor)]
-      [(struct term:mul (a b)) (* (eval-factor a) (eval-term b))]
-      [(struct term:div (a b)) (quotient (eval-factor a) (eval-term b))]))
+      [(struct term:mul (a b)) (* (eval-term a) (eval-factor b))]
+      [(struct term:div (a b)) (quotient (eval-term a) (eval-factor b))]))
   (define (eval-factor factor)
     (match (factor-value factor)
       [(and fex (struct* expression ())) (eval-expr fex the-state)]
@@ -330,9 +330,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                        [(list 'semicolon a xs ...) (loop (cons a xs))]
                        [(list 'comma a xs ...) (display #\tab) (loop (cons a xs))]
                        [(list) (newline)]
-                       [(list (or 'semicolon 'comma)) (void)]
-                       ['semicolon (void)]
-                       ['comma (display #\tab)]))
+                       [(list 'semicolon) (void)]
+                       [(list 'comma) (display #\tab)]))
                    the-state]
                   [(struct statement:list ((list expr)))
                    (tb-write (state-program the-state))]

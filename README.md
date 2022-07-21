@@ -10,17 +10,13 @@ lex/yacc clone.
 
 ## Status
 
-It sorta works.  I think there's a precedence issue with MUL / DIV.  Testcase:
+It mostly works.
 
-```bash
-echo run | cat examples/nonfree/random.bas - | racket tinybasic.rkt
-```
+### TODO
 
-outputs:
-
-```
-876166508014850563998993211812996257478583618645656828278906681797551328261158485532314783354491418866361211127119281689656470
-```
+- `INPUT`
+- `#lang tinybasic`
+- Clean up non-free examples/docs
 
 ## Differences
 
