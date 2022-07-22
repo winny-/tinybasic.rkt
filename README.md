@@ -8,6 +8,28 @@ lex/yacc clone.
 - http://www.ittybittycomputers.com/IttyBitty/TinyBasic/TBuserMan.htm
 - https://en.wikipedia.org/wiki/Tiny_BASIC
 
+## Installation
+
+```
+raco pkg install tinybasic
+```
+
+## Usage
+
+Run `tinybasic` or `racket -l tinybasic` to start the tinybasic monitor.  To
+run a program and quit, try `tinybasic --batch yourprogram.bas`.  Drop the
+`--batch` if you wish to load the program then start the tinybasic monitor.
+
+Alternately, you may also use Racket's `#lang` facility:
+
+```
+#lang tinybasic
+100 PRINT "Hello, world!"
+120 END
+```
+
+(Run this via `racket your-hashlang-tinybasic-file.bas`.)
+
 ## Status
 
 It mostly works.
@@ -15,14 +37,11 @@ It mostly works.
 ### TODO
 
 - `INPUT`
-- `#lang tinybasic`
 - Clean up non-free examples/docs
 
 ## Differences
 
-### New statements
-
-#### `BYE`
+### New statement - `BYE`
 
 Exit TinyBasic monitor.
 
@@ -33,9 +52,10 @@ REM Exits tinybasic.rkt and returns control back to shell.
 BYE
 ```
 
-#### `LOAD`
+### New statement - `LOAD`
 
-Load a program from a file.
+Load **a line-numbered program** from a file.  Direct-mode lines (ones without
+a line number) are ignored.
 
 Example:
 
@@ -44,7 +64,7 @@ REM Loads examples/hello.bas.
 LOAD "examples/hello.bas"
 ```
 
-#### `SAVE`
+### New statement `SAVE`
 
 Save a program to a file.
 
