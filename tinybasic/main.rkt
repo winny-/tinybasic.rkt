@@ -1,15 +1,3 @@
-#|
-
-TinyBASIC implementation. Great language to practice with Racket's
-lex/yacc clone.
-
-More information:
-
-http://www.ittybittycomputers.com/IttyBitty/TinyBasic/TBuserMan.htm
-https://en.wikipedia.org/wiki/Tiny_BASIC
-
-|#
-
 #lang racket
 
 (require parser-tools/lex
@@ -18,6 +6,8 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
          readline/pread)
 
 (require racket/pretty)
+
+(provide (all-defined-out))
 
 (define-lex-trans :ci
   (λ (stx)
@@ -89,13 +79,6 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
    [")" (token-CLOSE-PAREN)]
    [twhitespace (tb-lexer input-port)]
    [tcr (token-NEWLINE)]))
-
-(define (tb-lex/list ip)
-  (define (gen) (tb-lexer ip))
-  (let loop ([acc empty])
-    (match (gen)
-      [(? (curry equal? (token-EOF)) e) (reverse (cons e acc))]
-      [other (loop (cons other acc))])))
 
 (struct line (number text entire) #:transparent)
 
@@ -207,6 +190,12 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
     (separator [(COMMA) 'comma]
                [(SEMICOLON) 'semicolon]))))
 
+(define (tb-load [ip (current-input-port)])
+  (struct-copy state clean-state
+               [program
+                (for/hash ([li (port->list tb-read ip)])
+                  (values (line-number li) li))]))
+
 (define (port->tinybasic-program ip)
   (port->list tb-read ip))
 
@@ -302,10 +291,7 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
        [(or (list) (list #f _ ...)) (raise-user-error 'eval-line "RETURN with invalid return address!")]
        [(list no xs ...) (struct-copy state the-state [lineno no] [gosubs xs])])]
     [(struct statement:load (filename))
-     (struct-copy state clean-state
-                  [program
-                   (for/hash ([li (with-input-from-file filename (thunk (port->list tb-read)))])
-                     (values (line-number li) li))])]
+     (with-input-from-file filename (tb-load))]
     [(struct statement:bye ()) (exit 0)]
     [stmt
      (define st (match stmt
@@ -378,6 +364,14 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
          no)))
 
 (define (main)
+  (define *file* (make-parameter #f))
+  (define *batch* (make-parameter #f))
+  (command-line
+   #:once-each (["-b" "--batch"]
+                "Batch mode (RUN after startup, BYE when program finishes)"
+                (*batch* #t))
+   #:args ([filename #f])
+   (*file* filename))
   (define st clean-state)
   (define (eval what)
     (match what
@@ -392,14 +386,21 @@ https://en.wikipedia.org/wiki/Tiny_BASIC
                                                    lineno the-line)]))])]
       [idk (void)])) ; Whatever this is
 
-  (when (terminal-port? (current-input-port))
-    (dynamic-require 'readline #f)
-    (keep-duplicates 'unconsecutive))
+  (when (*file*)
+    (set! st (with-input-from-file (*file*) tb-load)))
+  (cond
+    [(*batch*)
+     (eval (cons (void) (line #f "RUN" "RUN")))
+     (eval (cons (void) (line #f "BYE" "BYE")))]
+    [else
+     (when (and (terminal-port? (current-input-port)))
+       (dynamic-require 'readline #f)
+       (keep-duplicates 'unconsecutive))
 
-  (current-prompt-read tb-read)
-  (current-eval eval)
-  (current-print (thunk* (void)))
-  (read-eval-print-loop))
+     (current-prompt-read tb-read)
+     (current-eval eval)
+     (current-print (thunk* (void)))
+     (read-eval-print-loop)]))
 
 (module+ main
   (main))
