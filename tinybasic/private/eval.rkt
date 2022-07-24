@@ -93,7 +93,7 @@ Evaluate tinybasic code.
      (match stmt
        [(or (struct* statement:rem ())
             (struct* statement:empty ()))
--        (void)]
+        (void)]
        [(struct statement:list ((list)))
         (tb-write (state-program the-state))]
        [(struct statement:list ((list expr)))
