@@ -36,7 +36,7 @@ It mostly works.
 
 ### TODO
 
-- `INPUT`
+- `INPUT` should prompt with `? ` if output line is empty
 - Clean up non-free examples/docs
 
 ## Differences

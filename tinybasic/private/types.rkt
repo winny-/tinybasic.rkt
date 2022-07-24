@@ -61,15 +61,14 @@ Break up racket cycling requires by putting types here.
       (canonicalize-var (string-ref v 0))))
 
 (define-match-expander expression>>var
-  (lambda (stx)
-    (syntax-case stx ()
-      [(_ id)
-       #'(struct* expression
+  (syntax-rules ()
+    [(_ id)
+     (struct* expression
                   ([unsignedexpr (struct unsignedexpr:unary
                                    ((struct term:unary
                                       ((struct factor
                                          ((? var? id)))))))]))]
-      [(_) #'(expression>>var _)])))
+    [(_) (expression>>var _)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

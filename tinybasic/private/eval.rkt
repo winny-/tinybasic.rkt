@@ -36,7 +36,7 @@ Evaluate tinybasic code.
       [(? string? var) (get-var the-state var)]
       [(struct function:rnd (expr)) (random (eval-expr expr the-state))]))
   (match-define (struct expression (sign unsignedexpr)) expr)
-  ((if (and sign (symbol=? sign -)) - +) ; Repeat after me, do not eval the sign.
+  ((if (and sign (symbol=? sign '-)) - +) ; Repeat after me, do not eval the sign.
    (eval-unsigned unsignedexpr)))
 
 (define/contract (eval-line the-line the-state)
@@ -54,7 +54,7 @@ Evaluate tinybasic code.
                         ['<= <=]))
      (if (operator (e left) (e right))
          (eval-line (struct-copy line the-line [text body]) the-state)
-         (goto 'next the-state))]
+         (goto next the-state))]
     [(struct statement:clear ()) clean-state]
     [(struct statement:end ())
      (goto #f the-state)]
@@ -69,8 +69,7 @@ Evaluate tinybasic code.
     [(struct statement:run ((list _ ..1)))
      (raise-user-error 'eval-line "Cannot use RUN,exprlist from a program")]
     [(struct statement:run ((list)))
-     (goto (first-line the-state)
-           the-state)]
+     (goto start the-state)]
     [(struct statement:return ())
      (match (state-gosubs the-state)
        [(or (list) (list #f _ ...)) (raise-user-error 'eval-line "RETURN with invalid return address!")]
@@ -78,9 +77,9 @@ Evaluate tinybasic code.
     [(struct statement:load (filename))
      (with-input-from-file filename (tb-load))]
     [(struct statement:let (var expr))
-     (goto 'next (set-var the-state var (e expr)))]
+     (goto next (set-var the-state var (e expr)))]
     [(struct statement:input ((list exprs ...)))
-     (goto 'next
+     (goto next
            (for/fold ([st the-state])
                      ([expr exprs])
              (match expr
@@ -122,7 +121,7 @@ Evaluate tinybasic code.
           (thunk (tb-write (state-program the-state)))
           #:mode 'text
           #:exists 'truncate)])
-     (struct-copy state the-state [lineno (next-line-in-listing the-state)])]))
+     (goto next the-state)]))
 
 (define/contract (set-var-from-input the-state var)
   (state? var? . -> . state?)
@@ -196,18 +195,15 @@ Evaluate tinybasic code.
                    #:when (> no last-line))
          no)))
 
-;; This macro causes its body to be executed twice if (goto next ...) is used.
-;; So use a function for now.
-#;
-(define-syntax (goto stx)
-  (syntax-case stx (next)
-    [(_ next st) #'(goto (next-line-in-listing st) st)]
-    [(_ no st) #'(let ([no2 no])
-                   (struct-copy state st [lineno no2]))]))
+(define-syntax goto
+  (syntax-rules (start next)
+    [(_ start st)
+     ;; Use a binding to prevent double-evaluation of the expression "st".
+     (let ([st2 st])
+       (goto (first-line st2) st2))]
+    [(_ next st)
+     ;; Use a binding to prevent double-evaluation of the expression "st".
+     (let ([st2 st])
+       (goto (next-line-in-listing st2) st2))]
+    [(_ no st) (struct-copy state st [lineno no])]))
 
-
-(define/contract (goto what st)
-  ((or/c line-number? 'next) state? . -> . state?)
-  (match what
-    ['next (goto (next-line-in-listing st) st)]
-    [num (struct-copy state st [lineno num])]))
