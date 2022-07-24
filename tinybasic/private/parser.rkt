@@ -97,7 +97,8 @@ Plus read/write a program.
 
 (struct line (number text entire) #:transparent)
 
-(define (string->line s)
+(define/contract (string->line s)
+  (string? . -> . (or/c #f line?))
   (match s
     [(regexp #px"([0-9 ]*)(.*)" (list entire num stmt))
      (line (string->number (string-replace num " " "")) stmt entire)]
@@ -113,7 +114,7 @@ Plus read/write a program.
             (raise-syntax-error 'tb-parser (format "~a ~a ~a" tok-ok? tok-name tok-value))))
    (grammar
     (statement [(PRINT printlist) (statement:print $2)]
-               [(INPUT varlist) (statement:input $2)]
+               [(INPUT exprlist) (statement:input $2)]
                [(LET var EQ expression) (statement:let $2 $4)]
                [(var EQ expression) (statement:let $1 $3)]
                [(GOTO expression) (statement:goto $2)]
@@ -141,8 +142,6 @@ Plus read/write a program.
                [(printitem separator printlist) (cons $1 (cons $2 $3))])
     (printitem [(expression) $1]
                [(STRING) $1])
-    (varlist [(var) (list $1)]
-             [(var COMMA varlist) (cons $1 $3)])
     (exprlist [(expression) (list $1)]
               [(expression COMMA exprlist) (cons $1 $3)])
     (expression [(unsignedexpr) (expression #f $1)]
@@ -174,7 +173,42 @@ Plus read/write a program.
     (separator [(COMMA) 'comma]
                [(SEMICOLON) 'semicolon]))))
 
-(define (tb-load [ip (current-input-port)])
+(define input-parser
+  (parser
+   (tokens complex-tokens simple-tokens)
+   (start exprs-or-none)
+   (end EOF NEWLINE) ; Probably safe to omit NEWLINE as this should never be
+                     ; used for an entire program.
+   (error (λ (tok-ok? tok-name tok-value)
+            (raise-syntax-error 'input-parser (format "~a ~a ~a" tok-ok? tok-name tok-value))))
+   (grammar
+    (exprs-or-none [(exprlist) $1]
+                   [() empty])
+    (exprlist [(expression) (list $1)]
+              [(expression COMMA exprlist) (cons $1 $3)])
+    (expression [(unsignedexpr) (expression #f $1)]
+                [(ADD unsignedexpr) (expression '+ $2)]
+                [(SUB unsignedexpr) (expression '- $2)])
+    (unsignedexpr [(term) (unsignedexpr:unary $1)]
+                  [(term ADD unsignedexpr)
+                   (unsignedexpr:add $1 $3)]
+                  [(term SUB unsignedexpr)
+                   (unsignedexpr:sub $1 $3)])
+    (term [(factor) (term:unary $1)]
+          ;; Note term and factor are reversed.  I'm guessing the original
+          ;; publication's grammar was slightly incorrect (as per the English
+          ;; description in the same publication).
+          [(term DIV factor) (term:div $1 $3)]
+          [(term MUL factor) (term:mul $1 $3)])
+    (factor [(VAR) (factor $1)]
+            [(NUMBER) (factor $1)]
+            [(OPEN-PAREN expression CLOSE-PAREN) (factor $2)]
+            [(function) (factor $1)])
+    (function [(RND OPEN-PAREN expression CLOSE-PAREN) (function:rnd $3)])
+    (var [(VAR) $1]))))
+
+(define/contract (tb-load [ip (current-input-port)])
+  (() (input-port?) . ->* . state?)
   (struct-copy state clean-state
                [program
                 (for/hash ([li (port->list tb-read ip)]
@@ -194,6 +228,16 @@ Plus read/write a program.
           (raise-syntax-error 'tb-read "Line number cannot be zero in `~a'" entire)]
          [(? line? li) li]
          [#f (raise-syntax-error 'tb-read "Bad line `~a'" text)])])))
+
+(define/contract (tb-read-input [ip (current-input-port)])
+  (() (input-port?) . ->* . (or/c eof-object? (listof expression?)))
+  (parameterize ([readline-prompt #"? "])
+    (match (read-line ip)
+      [(? eof-object? e) e]
+      [text
+       (with-input-from-string text
+        (thunk
+         (input-parser (thunk (tb-lexer (current-input-port))))))])))
 
 (define/contract (parse-line s)
   (-> (or/c string? line?) statement?)

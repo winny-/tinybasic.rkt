@@ -11,4 +11,7 @@
     (strip-context
      #'(module tinybasic-runner racket
          (require tinybasic/private/eval)
-         (void (tb-run 'initial-state))))))
+         (define STATE 'initial-state)
+         (provide STATE)
+         (module+ main
+           (void (tb-run STATE)))))))

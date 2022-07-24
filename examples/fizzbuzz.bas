@@ -1,6 +1,7 @@
+#lang tinybasic
 100 REM Fizz Buzz
 120 LET I=1
-125 Z=100
+125 INPUT Z
 130 
 135 LET A = 0
 140 IF I/3*3=I THEN GOSUB 280

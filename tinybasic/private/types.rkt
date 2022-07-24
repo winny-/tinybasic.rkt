@@ -3,7 +3,11 @@ Break up racket cycling requires by putting types here.
 |#
 #lang racket/base
 
-(require racket/list)
+(require racket/list
+         racket/match
+         racket/contract/base
+         racket/contract/region
+         (for-syntax racket/base))
 
 (provide (all-defined-out))
 
@@ -38,14 +42,57 @@ Break up racket cycling requires by putting types here.
 (struct term:div term (a b) #:transparent)
 (struct factor (value) #:transparent)
 
+(define (var? v)
+  (cond [(char? v)
+         (or (char<=? #\A v #\Z)
+             (char<=? #\a v #\z))]
+        [(string? v)
+         (and (= 1 (string-length v))
+              (var? (string-ref v 0)))]
+        [else #f]))
+
+(define (line-number? v) (or (not v)
+                             (exact-positive-integer? v)))
+
+(define/contract (canonicalize-var v)
+  (var? . -> . char?)
+  (if (char? v)
+      (char-upcase v)
+      (canonicalize-var (string-ref v 0))))
+
+(define-match-expander expression>>var
+  (lambda (stx)
+    (syntax-case stx ()
+      [(_ id)
+       #'(struct* expression
+                  ([unsignedexpr (struct unsignedexpr:unary
+                                   ((struct term:unary
+                                      ((struct factor
+                                         ((? var? id)))))))]))]
+      [(_) #'(expression>>var _)])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (make-vars)
-  (for/hash ([v (in-list (range 26))])
-    (values (integer->char (+ v (char->integer #\A))) 0)))
+(define (tb-var-integer? v)
+  (and (exact-integer? v)
+       (<= -32768 v +32767)))
 
-(define (get-var st var)
-  (hash-ref (state-vars st) var))
+(define (make-vars)
+  (define-values (START END) (values #\A #\B))
+  (for/hash ([v (in-range (char->integer START) (add1 (char->integer END)))])
+    (values (integer->char (+ v (char->integer START)))
+            0)))
 
 (struct state (vars program gosubs lineno inputs) #:transparent)
 (define clean-state (state (make-vars) (hash) empty #f empty))
+
+(define/contract (get-var st var)
+  (state? var? . -> . tb-var-integer?)
+  (hash-ref (state-vars st) (canonicalize-var var)))
+
+(define/contract (set-var st var int)
+  (state? var? tb-var-integer? . -> . state?)
+  (struct-copy state st [vars (hash-set (state-vars st)
+                                        (canonicalize-var var)
+                                        int)]))
+
