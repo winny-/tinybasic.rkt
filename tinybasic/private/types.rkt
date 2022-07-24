@@ -78,7 +78,7 @@ Break up racket cycling requires by putting types here.
        (<= -32768 v +32767)))
 
 (define (make-vars)
-  (define-values (START END) (values #\A #\B))
+  (define-values (START END) (values #\A #\Z))
   (for/hash ([v (in-range (char->integer START) (add1 (char->integer END)))])
     (values (integer->char (+ v (char->integer START)))
             0)))
