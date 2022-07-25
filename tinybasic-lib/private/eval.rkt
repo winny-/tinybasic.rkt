@@ -1,6 +1,3 @@
-#|
-Evaluate tinybasic code.
-|#
 #lang racket/base
 
 (require racket/bool
@@ -9,7 +6,10 @@ Evaluate tinybasic code.
          racket/function
          racket/list
          racket/match
+         racket/port
          (for-syntax racket/base)
+
+         readline/pread
 
          "parser.rkt"
          "types.rkt")
@@ -129,7 +129,6 @@ Evaluate tinybasic code.
   (match the-state
     [(struct* state ([inputs (list a as ...)]))
      (define evaluated (match a
-                         [(? exact-integer?) a]
                          [(struct* expression ()) (eval-expr a the-state)]))
      (struct-copy state
                   (set-var the-state var evaluated)
@@ -163,9 +162,7 @@ Evaluate tinybasic code.
                (set-var-from-input st var)])]))
        the-state]
       [(struct statement:run ((list xs ..1))) ; Direct mode RUN,a,b,c,d
-       ;; Save the inputs then rerun the line as a bare RUN statement.
-       (eval-line/direct (struct-copy line the-line [text "RUN"])
-                         (struct-copy state the-state [inputs (append (state-inputs the-state) xs)]))]
+       (tb-run the-state xs)]
       [_ (eval-line the-line the-state)])) ; Everything else behaves the same.
   (let loop ([st next-state])
     (cond
@@ -207,3 +204,48 @@ Evaluate tinybasic code.
        (goto (next-line-in-listing st2) st2))]
     [(_ no st) (struct-copy state st [lineno no])]))
 
+
+(define/contract (initialize #:inputs [inputs empty]
+                             #:load-file [load-file #f]
+                             #:state [init-state clean-state])
+  (() (#:inputs (listof (or/c expression? string?))
+       #:load-file (or/c #f path-string? path?)
+       #:state state?)
+      . ->* . state?)
+  (when (and (terminal-port? (current-input-port)))
+    (dynamic-require 'readline #f)
+    (keep-duplicates 'unconsecutive))
+  (define base-state (if load-file
+                         (with-input-from-file load-file (thunk (tb-load #:state init-state)))
+                         init-state))
+  (define normalized-inputs
+    (let loop ([acc empty]
+               [inputs inputs])
+      (match inputs
+        [(list) (reverse acc)]
+        [(list (? string? s) xs ...)
+         (loop acc (append (with-input-from-string s tb-read-input) xs))]
+        [(list (and expr (struct* expression ())) xs ...)
+         (loop (cons expr acc) xs)])))
+  (struct-copy state base-state [inputs normalized-inputs]))
+
+(define/contract (start-repl [the-state clean-state])
+  (() (state?) . ->* . void?)
+  (define *state* (make-parameter the-state))
+  (define (my-eval what)
+    (match what
+      [(cons _ the-line)
+       (match the-line
+         [(struct line (#f stmt _))
+          (with-handlers ([exn:fail? (λ (err) (printf "Eval failed: ~a\n" (exn-message err)) (*state*))])
+            (*state* (eval-line/direct the-line (*state*))))]
+         [(struct line (lineno stmt raw))
+          (*state* (struct-copy state (*state*)
+                                [program (hash-set (state-program (*state*))
+                                                   lineno the-line)]))])]
+      [idk (void)]))
+  (parameterize ([current-prompt-read tb-read]
+                 [current-eval my-eval]
+                 [current-print (thunk* (void))])
+    (read-eval-print-loop))
+  (void))
