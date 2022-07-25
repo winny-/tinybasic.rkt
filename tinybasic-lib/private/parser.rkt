@@ -95,8 +95,6 @@ Plus read/write a program.
    [twhitespace (tb-lexer input-port)]
    [tcr (token-NEWLINE)]))
 
-(struct line (number text entire) #:transparent)
-
 (define/contract (string->line s)
   (string? . -> . (or/c #f line?))
   (match s
@@ -207,9 +205,11 @@ Plus read/write a program.
     (function [(RND OPEN-PAREN expression CLOSE-PAREN) (function:rnd $3)])
     (var [(VAR) $1]))))
 
-(define/contract (tb-load [ip (current-input-port)])
-  (() (input-port?) . ->* . state?)
-  (struct-copy state clean-state
+(define/contract (tb-load [ip (current-input-port)]
+                          #:state [init-state clean-state])
+  (() (input-port?
+       #:state state?) . ->* . state?)
+  (struct-copy state init-state
                [program
                 (for/hash ([li (port->list tb-read ip)]
                            #:when (line-number li)) ; Omit direct mode lines here.

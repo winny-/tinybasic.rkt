@@ -37,6 +37,8 @@ It mostly works.
 ### TODO
 
 - `INPUT` should prompt with `? ` if output line is empty
+- `racket -l tinybasic/examples/fizzbuzz --repl` should open a tinybasic
+  monitor (I think this should also fix DrRacket interaction.)
 - Clean up non-free examples/docs
 
 ## Differences
