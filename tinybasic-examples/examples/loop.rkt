@@ -1,6 +1,0 @@
-#lang tinybasic
-100 LET X = 10
-120 PRINT X
-140 LET X = X - 1
-160 IF X <> 0 THEN GOTO 120
-180 END
