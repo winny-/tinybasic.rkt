@@ -1,7 +1,8 @@
 ((nil
   (eval
    (lambda ()
-     (when (and (string= (file-name-extension (buffer-file-name))
+     (when (and (buffer-file-name)
+                (string= (file-name-extension (buffer-file-name))
                          "rkt")
                 (not (string= (file-name-nondirectory (buffer-file-name))
                               "info"))
