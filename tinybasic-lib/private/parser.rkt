@@ -29,10 +29,10 @@ Plus read/write a program.
     (syntax-case stx ()
       [(_ s)
        (let ([alternations
-                      (datum->syntax
-                       stx
-                       (for/list ([c (in-string (syntax->datum #'s))])
-                         `(:+ ,(char-upcase c) ,(char-downcase c))))])
+              (datum->syntax
+               stx
+               (for/list ([c (in-string (syntax->datum #'s))])
+                 `(:+ ,(char-upcase c) ,(char-downcase c))))])
          #`(:: #,@alternations))])))
 
 (define-lex-abbrevs

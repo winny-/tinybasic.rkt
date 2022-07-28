@@ -32,7 +32,11 @@
     (*input-string* s))
    #:args ([filename #f])
    (*file* filename))
-  (define base-state (initialize #:load-file (*file*) ; Could be #f
+  (define base-state (initialize #:load-file
+                                 (match (*file*)
+                                   ["-" (current-input-port)]
+                                   [#f #:when (*run*) (current-input-port)]
+                                   [thing thing])
                                  #:inputs (match (*input-string*)
                                             [#f empty]
                                             [(? string? s) (list s)])))

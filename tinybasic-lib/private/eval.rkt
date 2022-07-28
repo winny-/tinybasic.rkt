@@ -75,7 +75,7 @@
        [(or (list) (list #f _ ...)) (raise-user-error 'eval-line "RETURN with invalid return address!")]
        [(list no xs ...) (goto no (struct-copy state the-state [gosubs xs]))])]
     [(struct statement:load (filename))
-     (with-input-from-file filename (tb-load))]
+     (with-input-from-file filename tb-load)]
     [(struct statement:let (var expr))
      (goto next (set-var the-state var (e expr)))]
     [(struct statement:input ((list exprs ...)))
@@ -209,15 +209,16 @@
                              #:load-file [load-file #f]
                              #:state [init-state clean-state])
   (() (#:inputs (listof (or/c expression? string?))
-       #:load-file (or/c #f path-string? path?)
+       #:load-file (or/c #f path-string? path? input-port?)
        #:state state?)
       . ->* . state?)
   (when (and (terminal-port? (current-input-port)))
     (dynamic-require 'readline #f)
     (keep-duplicates 'unconsecutive))
-  (define base-state (if load-file
-                         (with-input-from-file load-file (thunk (tb-load #:state init-state)))
-                         init-state))
+  (define base-state (match load-file
+                       [#f init-state]
+                       [(? input-port? ip) (tb-load ip #:state init-state )]
+                       [filename (with-input-from-file filename (thunk (tb-load #:state init-state)))]))
   (define normalized-inputs
     (let loop ([acc empty]
                [inputs inputs])
