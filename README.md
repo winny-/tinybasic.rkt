@@ -39,7 +39,6 @@ It mostly works.
 - `INPUT` should prompt with `? ` if output line is empty
 - `racket -l tinybasic/examples/fizzbuzz --repl` should open a tinybasic
   monitor (I think this should also fix DrRacket interaction.)
-- Clean up non-free examples/docs
 
 ## Differences
 
@@ -77,6 +76,25 @@ REM Saves hello.bas
 10 PRINT "Hello, world!"
 SAVE "examples/hello.bas"
 ```
+
+### New statement `RACKET`
+
+Run Racket code with access to the interpreter's variables.
+
+This escape hatch gives the user a way to call native Racket code.  This means
+you could **in theory** write useful, modern applications in tinybasic.  Pretty
+cool eh?
+
+```racket
+10 REM Greet the user
+20 RACKET (printf "Hello, ~a.  How are you today?\n" (or (getenv "USER") (getenv "USERNAME")))
+30 END
+```
+
+If the user `set!`'s a single *upper* case variable, it will copy over to the
+Tinybasic environment.  Otherwise, if the user `set!`'s a single *lower* case
+variable, it will copy over.  Otherwise the original value is copied over
+(default is `0`).
 
 ## License
 

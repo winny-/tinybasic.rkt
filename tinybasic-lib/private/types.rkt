@@ -28,6 +28,7 @@ Break up racket cycling requires by putting types here.
 (struct statement:bye statement () #:prefab)
 (struct statement:load statement (filename) #:prefab)
 (struct statement:save statement (filename) #:prefab)
+(struct statement:racket statement (code) #:prefab)
 
 (struct function () #:prefab)
 (struct function:rnd function (expr) #:prefab)
@@ -81,7 +82,7 @@ Break up racket cycling requires by putting types here.
 (define (make-vars)
   (define-values (START END) (values #\A #\Z))
   (for/hash ([v (in-range (char->integer START) (add1 (char->integer END)))])
-    (values (integer->char (+ v (char->integer START)))
+    (values (integer->char v)
             0)))
 
 (struct state (vars program gosubs lineno inputs) #:prefab)

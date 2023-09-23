@@ -42,10 +42,11 @@ Plus read/write a program.
   (trelop (:or #\< #\> #\= "<=" ">=" "<>" "><"))
   (tvar (:or (char-range #\A #\Z) (char-range #\a #\z)))
   (twhitespace (:+ (:or #\tab #\space)))
-  (tcr (:or "\r\n" #\newline)))
+  (tcr (:or "\r\n" #\newline))
+  (tany (:* (:~ #\newline #\return))))
 
 (define-tokens complex-tokens
-  (NUMBER STRING VAR REM))
+  (NUMBER STRING VAR REM RACKET))
 
 (define-empty-tokens simple-tokens
   ( ; This blank keeps racket-mode happy
@@ -56,8 +57,7 @@ Plus read/write a program.
 (define tb-lexer
   (lexer
    [(eof) (token-EOF)]
-   [(:: (:ci "REM") (:* (:~ #\newline #\return)))
-    (token-REM lexeme)]
+   [(:: (:ci "REM") tany) (token-REM lexeme)]
    [tvar (token-VAR (string-upcase lexeme))]
    [tnumber (token-NUMBER (string->number lexeme))]
    [tstring (token-STRING (string-replace lexeme "\"" ""))]
@@ -75,6 +75,7 @@ Plus read/write a program.
    [(:ci "RND") (token-RND)]
    [(:ci "THEN") (token-THEN)]
    [(:ci "BYE") (token-BYE)]
+   [(:: (:or (:ci "RACKET") (:ci "RKT")) tany) (token-RACKET lexeme)]
    [(:ci "LOAD") (token-LOAD)]
    [(:ci "SAVE") (token-SAVE)]
    ["=" (token-EQ)]
@@ -133,6 +134,11 @@ Plus read/write a program.
                [(BYE) (statement:bye)]
                [(LOAD STRING) (statement:load $2)]
                [(SAVE STRING) (statement:save $2)]
+               [(RACKET)
+                (statement:racket
+                 (regexp-replace #px"^[[:blank:]]*(?i:(racket|rkt))[[:blank:]]*"
+                                 $1
+                                 ""))]
                [() (statement:empty)])
     (printlist [() empty]
                [(printitem) (list $1)]

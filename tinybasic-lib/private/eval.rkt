@@ -7,6 +7,7 @@
          racket/list
          racket/match
          racket/port
+         racket/enter
          (for-syntax racket/base)
 
          readline/pread
@@ -15,6 +16,10 @@
          "types.rkt")
 
 (provide (all-defined-out))
+
+(define original-prompt-read (current-prompt-read))
+(define original-eval (current-eval))
+(define original-print (current-print))
 
 (define/contract (eval-expr expr the-state)
   (expression? state? . -> . exact-integer?) ; XXX This should be a more
@@ -38,6 +43,9 @@
   (match-define (struct expression (sign unsignedexpr)) expr)
   ((if (and sign (symbol=? sign '-)) - +) ; Repeat after me, do not eval the sign.
    (eval-unsigned unsignedexpr)))
+
+(define (char->symbol ch)
+  (string->symbol (string ch)))
 
 (define/contract (eval-line the-line the-state)
   (line? state? . -> . state?)
@@ -87,6 +95,39 @@
                 (set-var-from-input st var)]
                [_ (raise-user-error 'eval-line "Bad inputs element ~v in state object" expr)])))]
     [(struct statement:bye ()) (exit 0)]
+    [(struct statement:racket (s))
+     (parameterize ([current-prompt-read original-prompt-read]
+                    [current-print original-print]
+                    [current-eval original-eval])
+       (define ns (make-base-namespace))
+       (for ([(k v) (in-hash (state-vars the-state))])
+         (define (set-var! ch)
+           (namespace-set-variable-value! (string->symbol (string ch)) v #t ns))
+         (set-var! k)
+         (set-var! (char-downcase k)))
+       (define sexpr (with-input-from-string s read))
+       (eval sexpr ns)
+       (for/fold ([st the-state] #:result (goto next st))
+                 ([i (in-range (char->integer #\a) (add1 (char->integer #\z)))])
+         (define c (integer->char i))
+         (define undefined (gensym))
+         (define (get-value ch)
+           (namespace-variable-value (string->symbol (string ch))
+                                     #t
+                                     (thunk undefined)
+                                     ns))
+         (define v (get-value c))
+         (define V (get-value (char-upcase c)))
+         (define last (get-var the-state (char-upcase c)))
+         (cond
+           [(and (not (eq? undefined V))
+                 (not (equal? V last)))
+            (set-var st (char-upcase c) V)]
+           [(and (not (eq? undefined v))
+                 (not (equal? v last)))
+            (set-var st (char-upcase c) v)]
+           [else
+            st])))]
     ;; And statements that do not modify program state.
     [stmt
      (match stmt
@@ -217,7 +258,7 @@
     (keep-duplicates 'unconsecutive))
   (define base-state (match load-file
                        [#f init-state]
-                       [(? input-port? ip) (tb-load ip #:state init-state )]
+                       [(? input-port? ip) (tb-load ip #:state init-state)]
                        [filename (with-input-from-file filename (thunk (tb-load #:state init-state)))]))
   (define normalized-inputs
     (let loop ([acc empty]
