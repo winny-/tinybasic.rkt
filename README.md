@@ -96,6 +96,12 @@ Tinybasic environment.  Otherwise, if the user `set!`'s a single *lower* case
 variable, it will copy over.  Otherwise the original value is copied over
 (default is `0`).
 
+## Contrib
+
+There are examples in the tinybasic-examples package.  If you use org-mode, one
+can use ob-basic.el contained in the tinybasic-examples package to evaluate
+tinybasic programs in org-mode src blocks.
+
 ## License
 
 `tinybasic.rkt` is covered under MIT/X.
